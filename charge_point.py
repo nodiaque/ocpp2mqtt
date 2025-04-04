@@ -16,6 +16,8 @@ from ocpp.v16 import call_result
 logging.basicConfig(level=logging.INFO)
 
 load_dotenv(verbose=True)
+MQTT_USERNAME=os.getenv('MQTT_USERNAME')
+MQTT_PASSWORD=os.getenv('MQTT_PASSWORD')
 MQTT_HOSTNAME=os.getenv('MQTT_HOSTNAME')
 MQTT_PORT=int(os.getenv('MQTT_PORT'))
 MQTT_BASEPATH=os.getenv('MQTT_BASEPATH')
@@ -185,7 +187,68 @@ class ChargePoint(cp):
     async def mqtt_listen(self):
         print("Starting MQTT loop...")
         try:
-            async with Client(hostname=MQTT_HOSTNAME,port=MQTT_PORT) as client:
+           if not MQTT_USERNAME or not MQTT_PASSWORD:
+               async with Client(hostname=MQTT_HOSTNAME,port=MQTT_PORT) as client:
+                self.client=client
+                await client.subscribe(f"{MQTT_BASEPATH}/cmd/#")
+                async for message in client.messages:
+                    print("<-- MQTT msg received : ", message.payload)
+                    msg = JSON.loads(message.payload.decode("utf-8"))
+                    match msg['action']:
+                        case 'charging_enabled':  #logical master switch
+                            global charging_enabled
+                            charging_enabled = self.get_args(msg)
+                            print("<-- Charging enabled : ", charging_enabled)
+                            result = None
+                        case 'cancel_reservation':
+                            result = await mqtt_2_charge_point.cancel_reservation(self, self.get_args(msg))
+                        case 'change_availability':
+                            result = await mqtt_2_charge_point.change_availability(self, self.get_args(msg))
+                        case 'change_configuration':
+                            result = await mqtt_2_charge_point.change_configuration(self, self.get_args(msg))
+                        case 'clear_cache':
+                            result = await mqtt_2_charge_point.clear_cache(self, self.get_args(msg))
+                        case 'clear_charging_profile':
+                            result = await mqtt_2_charge_point.clear_charging_profile(self, self.get_args(msg))
+                        case 'data_transfer':
+                            result = await mqtt_2_charge_point.data_transfer(self, self.get_args(msg))
+                        case 'get_composite_schedule':
+                            result = await mqtt_2_charge_point.get_composite_schedule(self, self.get_args(msg))
+                        case 'get_configuration':
+                            result = await mqtt_2_charge_point.get_configuration(self, self.get_args(msg))
+                        case 'get_diagnostics':
+                            result = await mqtt_2_charge_point.get_diagnostics(self, self.get_args(msg))
+                        case 'get_local_version':
+                            result = await mqtt_2_charge_point.get_local_version(self, self.get_args(msg))
+                        case 'remote_start_transaction':
+                            result = await mqtt_2_charge_point.remote_start_transaction(self, self.get_args(msg))
+                        case 'remote_stop_transaction':
+                            result = await mqtt_2_charge_point.remote_stop_transaction(self, self.get_args(msg))
+                        case 'reserve_now':
+                            result = await mqtt_2_charge_point.reserve_now(self, self.get_args(msg))
+                        case 'reset':
+                            result = await mqtt_2_charge_point.reset(self, self.get_args(msg))
+                        case 'send_local_list':
+                            result = await mqtt_2_charge_point.send_local_list(self, self.get_args(msg))
+                        case 'set_charging_profile':
+                            result = await mqtt_2_charge_point.set_charging_profile(self, self.get_args(msg))
+                        case 'trigger_message':
+                            result = await mqtt_2_charge_point.trigger_message(self, self.get_args(msg))
+                        case 'unlock_connector':
+                            result = await mqtt_2_charge_point.unlock_connector(self, self.get_args(msg))
+                        case 'update_firmware':
+                            result = await mqtt_2_charge_point.update_firmware(self, self.get_args(msg))
+                        case _:
+                            print("Action not found")  
+                            result = None
+                    if result:
+                        print("--> MQTT result : ", result)
+                        try:
+                            await self.push_call_return_mqtt(vars(result))
+                        except Exception as e:
+                            print("Error publishing call result to MQTT : " + str(e))
+           else:
+            async with Client(hostname=MQTT_HOSTNAME,port=MQTT_PORT,username=MQTT_USERNAME,password=MQTT_PASSWORD) as client:
                 self.client=client
                 await client.subscribe(f"{MQTT_BASEPATH}/cmd/#")
                 async for message in client.messages:
